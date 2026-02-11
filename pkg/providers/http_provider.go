@@ -39,8 +39,13 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 		return nil, fmt.Errorf("API base not configured")
 	}
 
+	requestModel := model
+	if strings.HasPrefix(model, "ollama/") {
+		requestModel = strings.TrimPrefix(model, "ollama/")
+	}
+
 	requestBody := map[string]interface{}{
-		"model":    model,
+		"model":    requestModel,
 		"messages": messages,
 	}
 
@@ -174,10 +179,18 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 	model := cfg.Agents.Defaults.Model
 
 	var apiKey, apiBase string
+	ollamaProvider := false
 
 	lowerModel := strings.ToLower(model)
 
 	switch {
+	case strings.HasPrefix(model, "ollama/"):
+		apiBase = cfg.Providers.Ollama.APIBase
+		if apiBase == "" {
+			apiBase = "http://localhost:11434/v1"
+		}
+		ollamaProvider = true
+
 	case strings.HasPrefix(model, "openrouter/") || strings.HasPrefix(model, "anthropic/") || strings.HasPrefix(model, "openai/") || strings.HasPrefix(model, "meta-llama/") || strings.HasPrefix(model, "deepseek/") || strings.HasPrefix(model, "google/"):
 		apiKey = cfg.Providers.OpenRouter.APIKey
 		if cfg.Providers.OpenRouter.APIBase != "" {
@@ -238,7 +251,7 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 		}
 	}
 
-	if apiKey == "" && !strings.HasPrefix(model, "bedrock/") {
+	if apiKey == "" && !strings.HasPrefix(model, "bedrock/") && !ollamaProvider {
 		return nil, fmt.Errorf("no API key configured for provider (model: %s)", model)
 	}
 
